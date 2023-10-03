@@ -23,7 +23,7 @@ type ResourceOriginInfo struct {
 	Timestamp *time.Time `json:"time,omitempty"`
 
 	// Avoid extending
-	_ any
+	_ any `json:"-"`
 }
 
 // GrafanaResourceMetadata is standard k8s object metadata with helper functions
@@ -40,7 +40,7 @@ type GrafanaResource[Spec any, Status any] struct {
 	Status   *Status                 `json:"status,omitempty"`
 
 	// Avoid extending
-	_ any
+	_ any `json:"-"`
 }
 
 // Annotation keys
