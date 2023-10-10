@@ -417,3 +417,7 @@ func (s *Storage) Count(key string) (int64, error) {
 func (s *Storage) Versioner() storage.Versioner {
 	return &storage.APIObjectVersioner{}
 }
+
+func (s *Storage) RequestWatchProgress(ctx context.Context) error {
+	return nil
+}

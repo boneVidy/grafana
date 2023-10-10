@@ -9,9 +9,9 @@ import (
 	"xorm.io/xorm"
 
 	"github.com/grafana/grafana/pkg/infra/db"
-	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
-	"github.com/grafana/grafana/pkg/services/sqlstore"
+
+	// "github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/services/sqlstore/session"
 	"github.com/grafana/grafana/pkg/services/store/entity/migrations"
 	"github.com/grafana/grafana/pkg/services/store/entity/sqlstash"
@@ -88,7 +88,7 @@ func ProvideEntityDB(db db.DB, cfg *setting.Cfg, features featuremgmt.FeatureTog
 			engine.SetLogger(&xorm.DiscardLogger{})
 		} else {
 			// add stack to database calls to be able to see what repository initiated queries. Top 7 items from the stack as they are likely in the xorm library.
-			engine.SetLogger(sqlstore.NewXormLogger(log.LvlInfo, log.WithSuffix(log.New("sqlstore.xorm"), log.CallerContextKey, log.StackCaller(log.DefaultCallerDepth))))
+			// engine.SetLogger(sqlstore.NewXormLogger(log.LvlInfo, log.WithSuffix(log.New("sqlstore.xorm"), log.CallerContextKey, log.StackCaller(log.DefaultCallerDepth))))
 			engine.ShowSQL(true)
 			engine.ShowExecTime(true)
 		}
