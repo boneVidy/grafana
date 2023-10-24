@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	k8suser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
 	"github.com/grafana/grafana/pkg/infra/appcontext"
@@ -251,7 +252,13 @@ func resourceToEntity(key string, res runtime.Object) (*entity.Entity, error) {
 func contextWithFakeGrafanaUser(ctx context.Context) (context.Context, error) {
 	info, ok := request.UserFrom(ctx)
 	if !ok {
-		return ctx, fmt.Errorf("could not find k8s user info in context")
+		info = &k8suser.DefaultInfo{
+			Name:   "system:apiserver",
+			UID:    "system:apiserver",
+			Groups: []string{},
+			Extra:  map[string][]string{},
+		}
+		// return ctx, fmt.Errorf("could not find k8s user info in context")
 	}
 
 	var err error
