@@ -155,14 +155,8 @@ class LogsContainer extends PureComponent<LogsContainerProps, LogsContainerState
     return <></>;
   };
 
-  showContextToggle = (row?: LogRowModel): boolean => {
-    const { datasourceInstance } = this.props;
-
-    if (hasLogsContextSupport(datasourceInstance)) {
-      return datasourceInstance.showContextToggle(row);
-    }
-
-    return false;
+  showContextToggle = (row: LogRowModel): boolean => {
+    return hasLogsContextSupport(this.props.datasourceInstance);
   };
 
   getFieldLinks = (field: Field, rowIndex: number, dataFrame: DataFrame) => {
