@@ -343,10 +343,6 @@ const (
 	// Enables the transformations redesign
 	FlagTransformationsRedesign = "transformationsRedesign"
 
-	// FlagToggleLabelsInLogsUI
-	// Enable toggleable filters in log details view
-	FlagToggleLabelsInLogsUI = "toggleLabelsInLogsUI"
-
 	// FlagMlExpressions
 	// Enable support for Machine Learning in server-side expressions
 	FlagMlExpressions = "mlExpressions"

@@ -102,7 +102,6 @@ export interface FeatureToggles {
   logsExploreTableVisualisation?: boolean;
   awsDatasourcesTempCredentials?: boolean;
   transformationsRedesign?: boolean;
-  toggleLabelsInLogsUI?: boolean;
   mlExpressions?: boolean;
   traceQLStreaming?: boolean;
   metricsSummary?: boolean;
