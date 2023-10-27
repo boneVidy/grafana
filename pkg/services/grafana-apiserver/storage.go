@@ -7,6 +7,7 @@ package grafanaapiserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -83,7 +84,14 @@ func (s *Storage) Create(ctx context.Context, key string, obj runtime.Object, ou
 		return err
 	}
 
-	fmt.Printf("k8s CREATE:%#v\n", obj)
+	objKind := obj.GetObjectKind()
+	fmt.Printf("kind: %#v\n", objKind)
+
+	fmt.Printf("k8s CREATE: %#v\n\n%#v\n\n%#v\n\n", key, obj, out)
+
+	encoded, err := json.Marshal(obj)
+
+	fmt.Printf("encoded: %s\n", encoded)
 
 	/*
 		if err := s.Versioner().PrepareObjectForStorage(obj); err != nil {
@@ -204,13 +212,8 @@ func (s *Storage) Get(ctx context.Context, key string, opts storage.GetOptions, 
 		return apierrors.NewInternalError(err)
 	}
 
-	grn, err := keyToGRN(key, objPtr.GetObjectKind().GroupVersionKind().Kind)
-	if err != nil {
-		return apierrors.NewInternalError(err)
-	}
-
 	rsp, err := s.store.Read(ctx, &entity.ReadEntityRequest{
-		GRN:         grn,
+		Key:         key,
 		WithMeta:    true,
 		WithBody:    true,
 		WithStatus:  true,
@@ -225,7 +228,7 @@ func (s *Storage) Get(ctx context.Context, key string, opts storage.GetOptions, 
 			return nil
 		}
 
-		return apierrors.NewNotFound(s.gr, grn.ResourceIdentifier)
+		return apierrors.NewNotFound(s.gr, key)
 	}
 
 	err = entityToResource(rsp, objPtr)
@@ -249,7 +252,7 @@ func (s *Storage) GetList(ctx context.Context, key string, opts storage.ListOpti
 		return apierrors.NewInternalError(err)
 	}
 
-	k := s.newFunc().GetObjectKind()
+	k := key // s.newFunc().GetObjectKind()
 
 	fmt.Printf("kind: %#v\n", k)
 
@@ -263,7 +266,8 @@ func (s *Storage) GetList(ctx context.Context, key string, opts storage.ListOpti
 	}
 
 	rsp, err := s.store.Search(ctx, &entity.EntitySearchRequest{
-		Kind:     []string{s.newFunc().GetObjectKind().GroupVersionKind().Kind},
+		// Kind:     []string{s.newFunc().GetObjectKind().GroupVersionKind().Kind},
+		Key:      []string{k},
 		WithBody: true,
 	})
 	if err != nil {

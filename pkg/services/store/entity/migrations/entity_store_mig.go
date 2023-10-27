@@ -7,7 +7,7 @@ import (
 )
 
 func initEntityTables(mg *migrator.Migrator) string {
-	marker := "Initialize entity tables (v005)" // changing this key wipe+rewrite everything
+	marker := "Initialize entity tables (v006)" // changing this key wipe+rewrite everything
 	mg.AddMigration(marker, &migrator.RawSQLMigration{})
 
 	tables := []migrator.Table{}
@@ -20,6 +20,7 @@ func initEntityTables(mg *migrator.Migrator) string {
 
 			// The entity identifier
 			{Name: "tenant_id", Type: migrator.DB_BigInt, Nullable: false},
+			{Name: "key", Type: migrator.DB_Text, Nullable: false},
 			{Name: "kind", Type: migrator.DB_NVarchar, Length: 190, Nullable: false},
 			{Name: "uid", Type: migrator.DB_NVarchar, Length: 190, Nullable: false},
 
@@ -57,6 +58,7 @@ func initEntityTables(mg *migrator.Migrator) string {
 		},
 		Indices: []*migrator.Index{
 			{Cols: []string{"tenant_id", "kind", "uid"}, Type: migrator.UniqueIndex},
+			{Cols: []string{"tenant_id", "key"}, Type: migrator.UniqueIndex},
 			// {Cols: []string{"tenant_id", "folder", "slug"}, Type: migrator.UniqueIndex},
 			{Cols: []string{"folder"}, Type: migrator.IndexType},
 		},
@@ -72,6 +74,7 @@ func initEntityTables(mg *migrator.Migrator) string {
 
 			// The entity identifier
 			{Name: "tenant_id", Type: migrator.DB_BigInt, Nullable: false},
+			{Name: "key", Type: migrator.DB_Text, Nullable: false},
 			{Name: "kind", Type: migrator.DB_NVarchar, Length: 190, Nullable: false},
 			{Name: "uid", Type: migrator.DB_NVarchar, Length: 190, Nullable: false},
 
@@ -111,6 +114,7 @@ func initEntityTables(mg *migrator.Migrator) string {
 		Indices: []*migrator.Index{
 			{Cols: []string{"guid", "version"}, Type: migrator.UniqueIndex},
 			{Cols: []string{"tenant_id", "kind", "uid", "version"}, Type: migrator.UniqueIndex},
+			{Cols: []string{"tenant_id", "key", "version"}, Type: migrator.UniqueIndex},
 		},
 	})
 

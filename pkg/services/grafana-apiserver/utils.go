@@ -129,26 +129,26 @@ func entityToResource(rsp *entity.Entity, res runtime.Object) error {
 	}
 
 	if rsp.Folder != "" {
-		annotations["grafana.com/folder"] = rsp.Folder
+		annotations["grafana.app/folder"] = rsp.Folder
 	}
 	if rsp.CreatedBy != "" {
-		annotations["grafana.com/createdBy"] = rsp.CreatedBy
+		annotations["grafana.app/createdBy"] = rsp.CreatedBy
 	}
 	if rsp.UpdatedBy != "" {
-		annotations["grafana.com/updatedBy"] = rsp.UpdatedBy
+		annotations["grafana.app/updatedBy"] = rsp.UpdatedBy
 	}
 	if rsp.UpdatedAt != 0 {
 		updatedAt := time.UnixMilli(rsp.UpdatedAt).UTC()
-		annotations["grafana.com/updatedTimestamp"] = updatedAt.Format(time.RFC3339)
+		annotations["grafana.app/updatedTimestamp"] = updatedAt.Format(time.RFC3339)
 	}
-	annotations["grafana.com/slug"] = rsp.Slug
+	annotations["grafana.app/slug"] = rsp.Slug
 
 	if rsp.Origin != nil {
 		originTime := time.UnixMilli(rsp.Origin.Time).UTC()
-		annotations["grafana.com/originName"] = rsp.Origin.Source
-		annotations["grafana.com/originKey"] = rsp.Origin.Key
-		annotations["grafana.com/originTime"] = originTime.Format(time.RFC3339)
-		annotations["grafana.com/originPath"] = "" // rsp.Origin.Path
+		annotations["grafana.app/originName"] = rsp.Origin.Source
+		annotations["grafana.app/originKey"] = rsp.Origin.Key
+		annotations["grafana.app/originTimestamp"] = originTime.Format(time.RFC3339)
+		annotations["grafana.app/originPath"] = "" // rsp.Origin.Path
 	}
 
 	metaAccessor.SetAnnotations(annotations)
@@ -193,32 +193,33 @@ func resourceToEntity(key string, res runtime.Object) (*entity.Entity, error) {
 
 	rsp := &entity.Entity{
 		GRN:       g,
+		Key:       key,
 		Name:      metaAccessor.GetName(),
 		Guid:      string(metaAccessor.GetUID()),
 		Version:   metaAccessor.GetResourceVersion(),
-		Folder:    metaAccessor.GetAnnotations()["grafana.com/folder"],
+		Folder:    metaAccessor.GetAnnotations()["grafana.app/folder"],
 		CreatedAt: metaAccessor.GetCreationTimestamp().Time.UnixMilli(),
-		CreatedBy: metaAccessor.GetAnnotations()["grafana.com/createdBy"],
-		UpdatedBy: metaAccessor.GetAnnotations()["grafana.com/updatedBy"],
-		Slug:      metaAccessor.GetAnnotations()["grafana.com/slug"],
+		CreatedBy: metaAccessor.GetAnnotations()["grafana.app/createdBy"],
+		UpdatedBy: metaAccessor.GetAnnotations()["grafana.app/updatedBy"],
+		Slug:      metaAccessor.GetAnnotations()["grafana.app/slug"],
 		Origin: &entity.EntityOriginInfo{
-			Source: metaAccessor.GetAnnotations()["grafana.com/originName"],
-			Key:    metaAccessor.GetAnnotations()["grafana.com/originKey"],
-			// Path: metaAccessor.GetAnnotations()["grafana.com/originPath"],
+			Source: metaAccessor.GetAnnotations()["grafana.app/originName"],
+			Key:    metaAccessor.GetAnnotations()["grafana.app/originKey"],
+			// Path: metaAccessor.GetAnnotations()["grafana.app/originPath"],
 		},
 		Labels: metaAccessor.GetLabels(),
 	}
 
-	if metaAccessor.GetAnnotations()["grafana.com/updatedTimestamp"] != "" {
-		t, err := time.Parse(time.RFC3339, metaAccessor.GetAnnotations()["grafana.com/updatedTimestamp"])
+	if metaAccessor.GetAnnotations()["grafana.app/updatedTimestamp"] != "" {
+		t, err := time.Parse(time.RFC3339, metaAccessor.GetAnnotations()["grafana.app/updatedTimestamp"])
 		if err != nil {
 			return nil, err
 		}
 		rsp.UpdatedAt = t.UnixMilli()
 	}
 
-	if metaAccessor.GetAnnotations()["grafana.com/originTime"] != "" {
-		t, err := time.Parse(time.RFC3339, metaAccessor.GetAnnotations()["grafana.com/originTime"])
+	if metaAccessor.GetAnnotations()["grafana.app/originTimestamp"] != "" {
+		t, err := time.Parse(time.RFC3339, metaAccessor.GetAnnotations()["grafana.app/originTimestamp"])
 		if err != nil {
 			return nil, err
 		}

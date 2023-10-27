@@ -64,6 +64,7 @@ type sqlEntityServer struct {
 func (s *sqlEntityServer) getReadSelect(r *entity.ReadEntityRequest) string {
 	fields := []string{
 		"guid",
+		"key",
 		"tenant_id", "kind", "uid", "folder", // GRN + folder
 		"version", "size", "etag", "errors", // errors are always returned
 		"created_at", "created_by",
@@ -92,7 +93,7 @@ func (s *sqlEntityServer) getReadSelect(r *entity.ReadEntityRequest) string {
 
 func (s *sqlEntityServer) rowToReadEntityResponse(ctx context.Context, rows *sql.Rows, r *entity.ReadEntityRequest) (*entity.Entity, error) {
 	raw := &entity.Entity{
-		GRN:    &grn.GRN{ResourceGroup: "playlist.x.grafana.com"},
+		GRN:    &grn.GRN{ResourceGroup: "playlist.grafana.app"},
 		Origin: &entity.EntityOriginInfo{},
 	}
 
@@ -102,6 +103,7 @@ func (s *sqlEntityServer) rowToReadEntityResponse(ctx context.Context, rows *sql
 
 	args := []any{
 		&raw.Guid,
+		&raw.Key,
 		&raw.GRN.TenantID, &raw.GRN.ResourceKind, &raw.GRN.ResourceIdentifier, &raw.Folder,
 		&raw.Version, &raw.Size, &raw.ETag, &errors,
 		&raw.CreatedAt, &raw.CreatedBy,
@@ -177,18 +179,26 @@ func (s *sqlEntityServer) Read(ctx context.Context, r *entity.ReadEntityRequest)
 }
 
 func (s *sqlEntityServer) read(ctx context.Context, tx session.SessionQuerier, r *entity.ReadEntityRequest) (*entity.Entity, error) {
-	grn, err := s.validateGRN(ctx, r.GRN)
-	if err != nil {
-		return nil, err
-	}
-
 	table := "entity"
-	where := " (tenant_id=? AND kind=? AND uid=?)"
-	args := []any{grn.TenantID, grn.ResourceKind, grn.ResourceIdentifier}
+	where := []string{}
+	args := []any{}
+
+	if r.Key != "" {
+		where = append(where, "key=?")
+		args = append(args, r.Key)
+	} else {
+		grn, err := s.validateGRN(ctx, r.GRN)
+		if err != nil {
+			return nil, err
+		}
+
+		where = append(where, "(tenant_id=? AND kind=? AND uid=?)")
+		args = append(args, grn.TenantID, grn.ResourceKind, grn.ResourceIdentifier)
+	}
 
 	if r.Version != "" {
 		table = "entity_history"
-		where += " AND version=?"
+		where = append(where, "version=?")
 		args = append(args, r.Version)
 	}
 
@@ -199,7 +209,7 @@ func (s *sqlEntityServer) read(ctx context.Context, tx session.SessionQuerier, r
 	}
 
 	query += " FROM " + table +
-		" WHERE " + where
+		" WHERE " + strings.Join(where, " AND ")
 
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
@@ -228,13 +238,19 @@ func (s *sqlEntityServer) BatchRead(ctx context.Context, b *entity.BatchReadEnti
 			return nil, fmt.Errorf("requests must want the same things")
 		}
 
-		grn, err := s.validateGRN(ctx, r.GRN)
-		if err != nil {
-			return nil, err
+		if r.Key != "" {
+			constraints = append(constraints, "key=?")
+			args = append(args, r.Key)
+		} else {
+			grn, err := s.validateGRN(ctx, r.GRN)
+			if err != nil {
+				return nil, err
+			}
+
+			constraints = append(constraints, "(tenant_id=? AND kind=? AND uid=?)")
+			args = append(args, grn.TenantID, grn.ResourceKind, grn.ResourceIdentifier)
 		}
 
-		constraints = append(constraints, "(tenant_id=? AND kind=? AND uid=?)")
-		args = append(args, grn.TenantID, grn.ResourceKind, grn.ResourceIdentifier)
 		if r.Version != "" {
 			return nil, fmt.Errorf("version not supported for batch read (yet?)")
 		}
@@ -352,6 +368,7 @@ func (s *sqlEntityServer) AdminWrite(ctx context.Context, r *entity.AdminWriteEn
 			// generate guid for new entity
 			current.Guid = ulid.Make().String()
 			current.GRN = grn
+			current.Key = r.Entity.Key
 		}
 
 		if r.Entity.Folder != "" {
@@ -431,6 +448,7 @@ func (s *sqlEntityServer) AdminWrite(ctx context.Context, r *entity.AdminWriteEn
 		values := map[string]any{
 			// below are only set at creation
 			"guid":       current.Guid,
+			"key":        current.Key,
 			"tenant_id":  grn.TenantID,
 			"kind":       grn.ResourceKind,
 			"uid":        grn.ResourceIdentifier,
@@ -478,6 +496,7 @@ func (s *sqlEntityServer) AdminWrite(ctx context.Context, r *entity.AdminWriteEn
 		if isUpdate {
 			// remove values that are only set at insert
 			delete(values, "guid")
+			delete(values, "key")
 			delete(values, "tenant_id")
 			delete(values, "kind")
 			delete(values, "uid")
@@ -582,6 +601,7 @@ func (s *sqlEntityServer) Delete(ctx context.Context, r *entity.DeleteEntityRequ
 		var err error
 		rsp.Entity, err = s.Read(ctx, &entity.ReadEntityRequest{
 			GRN:         r.GRN,
+			Key:         r.Key,
 			WithBody:    true,
 			WithMeta:    true,
 			WithStatus:  true,
@@ -719,7 +739,7 @@ func (s *sqlEntityServer) Search(ctx context.Context, r *entity.EntitySearchRequ
 	}
 
 	fields := []string{
-		"guid", "guid",
+		"guid", "guid", "key",
 		"tenant_id", "kind", "uid",
 		"version", "folder", "slug", "errors", // errors are always returned
 		"size", "updated_at", "updated_by",
@@ -749,6 +769,10 @@ func (s *sqlEntityServer) Search(ctx context.Context, r *entity.EntitySearchRequ
 
 	if len(r.Kind) > 0 {
 		entityQuery.addWhereIn("kind", r.Kind)
+	}
+
+	if len(r.Key) > 0 {
+		entityQuery.addWhereIn("key", r.Key)
 	}
 
 	// Folder guid
@@ -797,7 +821,7 @@ func (s *sqlEntityServer) Search(ctx context.Context, r *entity.EntitySearchRequ
 		var errors []byte
 
 		args := []any{
-			&token, &result.Guid,
+			&token, &result.Guid, &result.Key,
 			&result.GRN.TenantID, &result.GRN.ResourceKind, &result.GRN.ResourceIdentifier,
 			&result.Version, &result.Folder, &result.Slug, &errors,
 			&result.Size, &result.UpdatedAt, &result.UpdatedBy,

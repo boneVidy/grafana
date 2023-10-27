@@ -62,6 +62,9 @@ message Entity {
   // Entity identifier -- tenant_id, kind, uid
   grn.GRN GRN = 3;
 
+  // k8s key value
+  string key = 22;
+
 	// The folder UID
 	string folder = 4;
 
@@ -150,6 +153,8 @@ message ReadEntityRequest {
   // Entity identifier
   grn.GRN GRN = 1;
 
+  string key = 7;
+
   // Fetch an explicit version (default is latest)
   string version = 2;
 
@@ -233,6 +238,8 @@ message DeleteEntityRequest {
   // Entity identifier
   grn.GRN GRN = 1;
 
+  string key = 3;
+
   // Used for optimistic locking.  If missing, the current version will be deleted regardless
   string previous_version = 2;
 }
@@ -298,6 +305,9 @@ message EntitySearchRequest {
 
   // limit to a specific kind (empty is all)
   repeated string kind = 4;
+
+  // limit to a specific key
+  repeated string key = 11;
 
   // Limit results to items in a specific folder
   string folder = 5;
