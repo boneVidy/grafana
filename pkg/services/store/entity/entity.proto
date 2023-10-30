@@ -62,6 +62,9 @@ message Entity {
   // Entity identifier -- tenant_id, kind, uid
   grn.GRN GRN = 3;
 
+  // group version of the entity
+  string group_version = 23;
+
   // k8s key value
   string key = 22;
 

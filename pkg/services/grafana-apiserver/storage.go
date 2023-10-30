@@ -7,7 +7,6 @@ package grafanaapiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -84,20 +83,11 @@ func (s *Storage) Create(ctx context.Context, key string, obj runtime.Object, ou
 		return err
 	}
 
-	objKind := obj.GetObjectKind()
-	fmt.Printf("kind: %#v\n", objKind)
-
 	fmt.Printf("k8s CREATE: %#v\n\n%#v\n\n%#v\n\n", key, obj, out)
 
-	encoded, err := json.Marshal(obj)
-
-	fmt.Printf("encoded: %s\n", encoded)
-
-	/*
-		if err := s.Versioner().PrepareObjectForStorage(obj); err != nil {
-			return err
-		}
-	*/
+	if err := s.Versioner().PrepareObjectForStorage(obj); err != nil {
+		return err
+	}
 
 	metaAccessor, err := meta.Accessor(obj)
 	if err != nil {
@@ -125,6 +115,8 @@ func (s *Storage) Create(ctx context.Context, key string, obj runtime.Object, ou
 	req := &entity.WriteEntityRequest{
 		Entity: e,
 	}
+
+	fmt.Printf("req: %#v\n\n", req)
 
 	rsp, err := s.store.Write(ctx, req)
 	if err != nil {

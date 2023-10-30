@@ -61,11 +61,11 @@ type sqlEntityServer struct {
 	snowflake *snowflake.Node
 }
 
-func (s *sqlEntityServer) getReadSelect(r *entity.ReadEntityRequest) string {
+func (s *sqlEntityServer) getReadFields(r *entity.ReadEntityRequest) []string {
 	fields := []string{
 		"guid",
 		"key",
-		"tenant_id", "kind", "uid", "folder", // GRN + folder
+		"tenant_id", "group", "group_version", "kind", "uid", "folder", // GRN + folder
 		"version", "size", "etag", "errors", // errors are always returned
 		"created_at", "created_by",
 		"updated_at", "updated_by",
@@ -83,6 +83,11 @@ func (s *sqlEntityServer) getReadSelect(r *entity.ReadEntityRequest) string {
 	if r.WithStatus {
 		fields = append(fields, "status")
 	}
+	return fields
+}
+
+func (s *sqlEntityServer) getReadSelect(r *entity.ReadEntityRequest) string {
+	fields := s.getReadFields(r)
 
 	quotedFields := make([]string, len(fields))
 	for i, f := range fields {
@@ -93,7 +98,7 @@ func (s *sqlEntityServer) getReadSelect(r *entity.ReadEntityRequest) string {
 
 func (s *sqlEntityServer) rowToReadEntityResponse(ctx context.Context, rows *sql.Rows, r *entity.ReadEntityRequest) (*entity.Entity, error) {
 	raw := &entity.Entity{
-		GRN:    &grn.GRN{ResourceGroup: "playlist.grafana.app"},
+		GRN:    &grn.GRN{},
 		Origin: &entity.EntityOriginInfo{},
 	}
 
@@ -104,7 +109,7 @@ func (s *sqlEntityServer) rowToReadEntityResponse(ctx context.Context, rows *sql
 	args := []any{
 		&raw.Guid,
 		&raw.Key,
-		&raw.GRN.TenantID, &raw.GRN.ResourceKind, &raw.GRN.ResourceIdentifier, &raw.Folder,
+		&raw.GRN.TenantID, &raw.GRN.ResourceGroup, &raw.GroupVersion, &raw.GRN.ResourceKind, &raw.GRN.ResourceIdentifier, &raw.Folder,
 		&raw.Version, &raw.Size, &raw.ETag, &errors,
 		&raw.CreatedAt, &raw.CreatedBy,
 		&raw.UpdatedAt, &raw.UpdatedBy,
@@ -371,6 +376,10 @@ func (s *sqlEntityServer) AdminWrite(ctx context.Context, r *entity.AdminWriteEn
 			current.Key = r.Entity.Key
 		}
 
+		if r.Entity.GroupVersion != "" {
+			current.GroupVersion = r.Entity.GroupVersion
+		}
+
 		if r.Entity.Folder != "" {
 			current.Folder = r.Entity.Folder
 		}
@@ -450,30 +459,32 @@ func (s *sqlEntityServer) AdminWrite(ctx context.Context, r *entity.AdminWriteEn
 			"guid":       current.Guid,
 			"key":        current.Key,
 			"tenant_id":  grn.TenantID,
+			"group":      grn.ResourceGroup,
 			"kind":       grn.ResourceKind,
 			"uid":        grn.ResourceIdentifier,
 			"created_at": createdAt,
 			"created_by": createdBy,
 			// below are set during creation and update
-			"folder":      current.Folder,
-			"slug":        current.Slug,
-			"updated_at":  updatedAt,
-			"updated_by":  updatedBy,
-			"body":        current.Body,
-			"meta":        current.Meta,
-			"status":      current.Status,
-			"size":        current.Size,
-			"etag":        current.ETag,
-			"version":     current.Version,
-			"name":        current.Name,
-			"description": current.Description,
-			"labels":      labels,
-			"fields":      fields,
-			"errors":      errors,
-			"origin":      current.Origin.Source,
-			"origin_key":  current.Origin.Key,
-			"origin_ts":   current.Origin.Time,
-			"message":     current.Message,
+			"group_version": current.GroupVersion,
+			"folder":        current.Folder,
+			"slug":          current.Slug,
+			"updated_at":    updatedAt,
+			"updated_by":    updatedBy,
+			"body":          current.Body,
+			"meta":          current.Meta,
+			"status":        current.Status,
+			"size":          current.Size,
+			"etag":          current.ETag,
+			"version":       current.Version,
+			"name":          current.Name,
+			"description":   current.Description,
+			"labels":        labels,
+			"fields":        fields,
+			"errors":        errors,
+			"origin":        current.Origin.Source,
+			"origin_key":    current.Origin.Key,
+			"origin_ts":     current.Origin.Time,
+			"message":       current.Message,
 		}
 
 		fmt.Printf("VALUES: %+v\n", values)
@@ -498,6 +509,7 @@ func (s *sqlEntityServer) AdminWrite(ctx context.Context, r *entity.AdminWriteEn
 			delete(values, "guid")
 			delete(values, "key")
 			delete(values, "tenant_id")
+			delete(values, "group")
 			delete(values, "kind")
 			delete(values, "uid")
 			delete(values, "created_at")
@@ -740,7 +752,7 @@ func (s *sqlEntityServer) Search(ctx context.Context, r *entity.EntitySearchRequ
 
 	fields := []string{
 		"guid", "guid", "key",
-		"tenant_id", "kind", "uid",
+		"tenant_id", "group", "group_version", "kind", "uid",
 		"version", "folder", "slug", "errors", // errors are always returned
 		"size", "updated_at", "updated_by",
 		"name", "description", // basic summary
@@ -772,7 +784,14 @@ func (s *sqlEntityServer) Search(ctx context.Context, r *entity.EntitySearchRequ
 	}
 
 	if len(r.Key) > 0 {
-		entityQuery.addWhereIn("key", r.Key)
+		where := []string{}
+		args := []any{}
+		for _, k := range r.Key {
+			args = append(args, k+"/%")
+			where = append(where, "key LIKE ?")
+		}
+
+		entityQuery.addWhere("("+strings.Join(where, " OR ")+")", args...)
 	}
 
 	// Folder guid
@@ -822,7 +841,7 @@ func (s *sqlEntityServer) Search(ctx context.Context, r *entity.EntitySearchRequ
 
 		args := []any{
 			&token, &result.Guid, &result.Key,
-			&result.GRN.TenantID, &result.GRN.ResourceKind, &result.GRN.ResourceIdentifier,
+			&result.GRN.TenantID, &result.GRN.ResourceGroup, &result.GroupVersion, &result.GRN.ResourceKind, &result.GRN.ResourceIdentifier,
 			&result.Version, &result.Folder, &result.Slug, &errors,
 			&result.Size, &result.UpdatedAt, &result.UpdatedBy,
 			&result.Name, &result.Description,
@@ -881,7 +900,7 @@ func (s *sqlEntityServer) FindReferences(ctx context.Context, r *entity.Referenc
 
 	fields := []string{
 		"guid", "guid",
-		"tenant_id", "kind", "uid",
+		"tenant_id", "group", "group_version", "kind", "uid",
 		"version", "folder", "slug", "errors", // errors are always returned
 		"size", "updated_at", "updated_by",
 		"name", "description", "meta",

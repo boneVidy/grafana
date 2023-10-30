@@ -12,8 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	k8suser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 
 	"github.com/grafana/grafana/pkg/infra/appcontext"
@@ -105,8 +105,7 @@ func entityToResource(rsp *entity.Entity, res runtime.Object) error {
 	}
 
 	if len(rsp.Meta) > 0 {
-		raw := []byte("{\"metadata\":" + string(rsp.Meta) + "}") // HACK
-		err = json.Unmarshal(raw, res)
+		err = json.Unmarshal(rsp.Meta, res)
 		if err != nil {
 			return err
 		}
@@ -118,7 +117,11 @@ func entityToResource(rsp *entity.Entity, res runtime.Object) error {
 	} else {
 		metaAccessor.SetNamespace("default") // org 1
 	}
-	// metaAccessor.SetKind(rsp.GRN.ResourceKind)
+	res.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   rsp.GRN.ResourceGroup,
+		Version: rsp.GroupVersion,
+		Kind:    rsp.GRN.ResourceKind,
+	})
 	metaAccessor.SetUID(types.UID(rsp.Guid))
 	metaAccessor.SetResourceVersion(rsp.Version)
 	metaAccessor.SetCreationTimestamp(metav1.Unix(rsp.CreatedAt/1000, rsp.CreatedAt%1000*1000000))
@@ -160,11 +163,15 @@ func entityToResource(rsp *entity.Entity, res runtime.Object) error {
 	// TODO fields?
 
 	if len(rsp.Body) > 0 {
-		err = json.Unmarshal(rsp.Body, res)
-		if err != nil {
-			return err
+		spec := reflect.ValueOf(res).Elem().FieldByName("Spec")
+		if spec != (reflect.Value{}) && spec.CanSet() {
+			err = json.Unmarshal(rsp.Body, spec.Addr().Interface())
+			if err != nil {
+				return err
+			}
 		}
 	}
+
 	if len(rsp.Status) > 0 {
 		status := reflect.ValueOf(res).Elem().FieldByName("Status")
 		if status != (reflect.Value{}) && status.CanSet() {
@@ -174,6 +181,8 @@ func entityToResource(rsp *entity.Entity, res runtime.Object) error {
 			}
 		}
 	}
+
+	fmt.Printf("RESOURCE: %#v\n\n", res)
 
 	return nil
 }
@@ -192,16 +201,17 @@ func resourceToEntity(key string, res runtime.Object) (*entity.Entity, error) {
 	}
 
 	rsp := &entity.Entity{
-		GRN:       g,
-		Key:       key,
-		Name:      metaAccessor.GetName(),
-		Guid:      string(metaAccessor.GetUID()),
-		Version:   metaAccessor.GetResourceVersion(),
-		Folder:    metaAccessor.GetAnnotations()["grafana.app/folder"],
-		CreatedAt: metaAccessor.GetCreationTimestamp().Time.UnixMilli(),
-		CreatedBy: metaAccessor.GetAnnotations()["grafana.app/createdBy"],
-		UpdatedBy: metaAccessor.GetAnnotations()["grafana.app/updatedBy"],
-		Slug:      metaAccessor.GetAnnotations()["grafana.app/slug"],
+		GRN:          g,
+		GroupVersion: res.GetObjectKind().GroupVersionKind().Version,
+		Key:          key,
+		Name:         metaAccessor.GetName(),
+		Guid:         string(metaAccessor.GetUID()),
+		Version:      metaAccessor.GetResourceVersion(),
+		Folder:       metaAccessor.GetAnnotations()["grafana.app/folder"],
+		CreatedAt:    metaAccessor.GetCreationTimestamp().Time.UnixMilli(),
+		CreatedBy:    metaAccessor.GetAnnotations()["grafana.app/createdBy"],
+		UpdatedBy:    metaAccessor.GetAnnotations()["grafana.app/updatedBy"],
+		Slug:         metaAccessor.GetAnnotations()["grafana.app/slug"],
 		Origin: &entity.EntityOriginInfo{
 			Source: metaAccessor.GetAnnotations()["grafana.app/originName"],
 			Key:    metaAccessor.GetAnnotations()["grafana.app/originKey"],
@@ -226,17 +236,18 @@ func resourceToEntity(key string, res runtime.Object) (*entity.Entity, error) {
 		rsp.Origin.Time = t.UnixMilli()
 	}
 
-	/*
-		rsp.Meta, err = json.Marshal(rrr.Object["metadata"])
-		if err != nil {
-			return nil, err
-		}
+	rsp.Meta, err = json.Marshal(meta.AsPartialObjectMetadata(metaAccessor))
+	if err != nil {
+		return nil, err
+	}
 
-		rsp.Body, err = json.Marshal(rrr.Object["spec"])
+	spec := reflect.ValueOf(res).Elem().FieldByName("Spec")
+	if spec != (reflect.Value{}) {
+		rsp.Body, err = json.Marshal(spec.Interface())
 		if err != nil {
 			return nil, err
 		}
-	*/
+	}
 
 	status := reflect.ValueOf(res).Elem().FieldByName("Status")
 	if status != (reflect.Value{}) {
@@ -253,13 +264,7 @@ func resourceToEntity(key string, res runtime.Object) (*entity.Entity, error) {
 func contextWithFakeGrafanaUser(ctx context.Context) (context.Context, error) {
 	info, ok := request.UserFrom(ctx)
 	if !ok {
-		info = &k8suser.DefaultInfo{
-			Name:   "system:apiserver",
-			UID:    "system:apiserver",
-			Groups: []string{},
-			Extra:  map[string][]string{},
-		}
-		// return ctx, fmt.Errorf("could not find k8s user info in context")
+		return ctx, fmt.Errorf("could not find k8s user info in context")
 	}
 
 	var err error
