@@ -243,7 +243,6 @@ export class Cascader extends PureComponent<CascaderProps, CascaderState> {
                 onBlur={this.onBlurCascade}
                 value={activeLabel}
                 onKeyDown={this.onInputKeyDown}
-                onChange={() => {}}
                 suffix={
                   focusCascade ? (
                     <Icon name="angle-up" />
